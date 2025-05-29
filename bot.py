@@ -408,11 +408,19 @@ def get_sensor_data():
     """Sensör verilerini al."""
     try:
         # LDR'den ışık değerini al
-        light = ldr.get_lux()
+        try:
+            light = ldr.get_lux()
+        except Exception as e:
+            logger.error(f"LDR okuma hatası: {e}")
+            light = 0.0
         
         # DHT11'den sıcaklık ve nem değerlerini al
         try:
-            temperature, humidity = dhteleven.get_temperature_and_humidity()
+            result = dhteleven.get_temperature_and_humidity()
+            if result is None:
+                temperature, humidity = 0.0, 0.0
+            else:
+                temperature, humidity = result
         except Exception as e:
             logger.error(f"DHT11 okuma hatası: {e}")
             temperature, humidity = 0.0, 0.0
@@ -883,11 +891,19 @@ def update_servo_status():
     """Sensör verilerine göre servo durumunu güncelle."""
     try:
         # LDR'den ışık değerini al
-        light = ldr.get_lux()
+        try:
+            light = ldr.get_lux()
+        except Exception as e:
+            logger.error(f"LDR okuma hatası: {e}")
+            light = 0.0
         
         # DHT11'den sıcaklık ve nem değerlerini al
         try:
-            temperature, humidity = dhteleven.get_temperature_and_humidity()
+            result = dhteleven.get_temperature_and_humidity()
+            if result is None:
+                temperature, humidity = 0.0, 0.0
+            else:
+                temperature, humidity = result
         except Exception as e:
             logger.error(f"DHT11 okuma hatası: {e}")
             temperature, humidity = 0.0, 0.0
