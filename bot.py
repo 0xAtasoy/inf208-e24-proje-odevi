@@ -11,6 +11,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKe
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler, ConversationHandler
 from dotenv import load_dotenv
 import servo  # Servo motor kontrolü için modül
+import ldr  # LDR modülünü import et
 
 # .env dosyasından değişkenleri yükle
 load_dotenv()
@@ -403,30 +404,44 @@ def get_condition_management_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 def get_sensor_data():
-    """Sensör verilerini al (örnek olarak rastgele değerler)."""
-    sensor_data = {
-        "temperature": round(random.uniform(18.0, 30.0), 1),
-        "humidity": round(random.uniform(15.0, 80.0), 1),
-        "light": round(random.uniform(5.0, 100.0), 1)
-    }
-    
-    # Koşulları değerlendirerek röle durumunu belirle
-    power = evaluate_conditions(sensor_data)
-    
-    # Röle durumunu servo motora göre ayarla
-    # power değeri evaluate_conditions fonksiyonu tarafından hesaplandı,
-    # ancak servo'nun gerçek durumunu kontrol ediyoruz
-    power = servo.durum_kontrol()
-    
-    # Röle durumunu ekle
-    sensor_data["power"] = power
-    
-    # Koşul listelerini ekle
-    on_conditions, off_conditions = load_conditions()
-    sensor_data["on_conditions"] = on_conditions
-    sensor_data["off_conditions"] = off_conditions
-    
-    return sensor_data
+    """Sensör verilerini al."""
+    try:
+        # LDR'den ışık değerini al
+        light = ldr.get_lux()
+        
+        # Diğer sensörler için örnek değerler (şimdilik)
+        sensor_data = {
+            "temperature": round(random.uniform(18.0, 30.0), 1),
+            "humidity": round(random.uniform(15.0, 80.0), 1),
+            "light": light  # Gerçek LDR değeri
+        }
+        
+        # Koşulları değerlendirerek röle durumunu belirle
+        power = evaluate_conditions(sensor_data)
+        
+        # Röle durumunu servo motora göre ayarla
+        power = servo.durum_kontrol()
+        
+        # Röle durumunu ekle
+        sensor_data["power"] = power
+        
+        # Koşul listelerini ekle
+        on_conditions, off_conditions = load_conditions()
+        sensor_data["on_conditions"] = on_conditions
+        sensor_data["off_conditions"] = off_conditions
+        
+        return sensor_data
+    except Exception as e:
+        logger.error(f"Sensör verisi alma hatası: {e}")
+        # Hata durumunda varsayılan değerler
+        return {
+            "temperature": 0.0,
+            "humidity": 0.0,
+            "light": 0.0,
+            "power": False,
+            "on_conditions": [],
+            "off_conditions": []
+        }
 
 def format_condition(condition):
     """Koşulu okunabilir bir formatta döndür."""
@@ -859,20 +874,27 @@ def handle_callback_query(update: Update, context: CallbackContext) -> None:
 
 def update_servo_status():
     """Sensör verilerine göre servo durumunu güncelle."""
-    sensor_data = {
-        "temperature": round(random.uniform(18.0, 30.0), 1),
-        "humidity": round(random.uniform(15.0, 80.0), 1),
-        "light": round(random.uniform(5.0, 100.0), 1)
-    }
-    
-    # Koşulları değerlendirerek röle durumunu belirle
-    power = evaluate_conditions(sensor_data)
-    
-    # Servo durumunu logla
-    logger.info(f"Servo durumu güncellendi: {'AÇIK' if power else 'KAPALI'}")
-    logger.info(f"Sensör değerleri: Sıcaklık={sensor_data['temperature']}°C, Nem={sensor_data['humidity']}%, Işık={sensor_data['light']} lux")
-    
-    return power
+    try:
+        # LDR'den ışık değerini al
+        light = ldr.get_lux()
+        
+        sensor_data = {
+            "temperature": round(random.uniform(18.0, 30.0), 1),
+            "humidity": round(random.uniform(15.0, 80.0), 1),
+            "light": light  # Gerçek LDR değeri
+        }
+        
+        # Koşulları değerlendirerek röle durumunu belirle
+        power = evaluate_conditions(sensor_data)
+        
+        # Servo durumunu logla
+        logger.info(f"Servo durumu güncellendi: {'AÇIK' if power else 'KAPALI'}")
+        logger.info(f"Sensör değerleri: Sıcaklık={sensor_data['temperature']}°C, Nem={sensor_data['humidity']}%, Işık={sensor_data['light']} lux")
+        
+        return power
+    except Exception as e:
+        logger.error(f"Servo durumu güncelleme hatası: {e}")
+        return False
 
 def auto_refresh_dashboard(context: CallbackContext) -> None:
     """Dashboard'u otomatik olarak yenile."""
@@ -964,20 +986,17 @@ def main() -> None:
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN bulunamadı. .env dosyasını kontrol edin.")
         return
-
-    # Başlangıçta servo motorun durumunu kontrol et
-    logger.info("Servo motor durumu kontrol ediliyor...")
-    if servo.durum_kontrol():
-        logger.info("Servo motor çalışıyor. Durum: AÇIK")
-    else:
-        logger.info("Servo motor çalışmıyor. Durum: KAPALI")
-
+    
+    # Servo durumunu kontrol et
+    servo_status = servo.durum_kontrol()
+    logger.info(f"Başlangıçta servo durumu: {'AÇIK' if servo_status else 'KAPALI'}")
+    
     # Updater oluştur ve token'ı geçir
     updater = Updater(token)
-
+    
     # Dispatcher al
     dispatcher = updater.dispatcher
-
+    
     # Koşul ekleme conversation handler'ı
     condition_conv_handler = ConversationHandler(
         entry_points=[
@@ -996,7 +1015,7 @@ def main() -> None:
         allow_reentry=True,
         name="condition_conversation"
     )
-
+    
     # Komut işleyicileri ekle
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("dashboard", dashboard))
@@ -1009,11 +1028,11 @@ def main() -> None:
     
     # Mesaj işleyicisi ekle (en sonda olmalı)
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-
+    
     # Bot'u başlat
     updater.start_polling()
     logger.info("Bot başlatıldı. Durdurmak için Ctrl+C tuşlarına basın.")
-
+    
     # Bot'u sonlandırılana kadar çalışır durumda tut
     updater.idle()
 
