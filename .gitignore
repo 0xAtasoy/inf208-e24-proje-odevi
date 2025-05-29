@@ -1,0 +1,170 @@
+# Python için .gitignore dosyası
+
+# Bytecode derlenmiş dosyalar
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C uzantıları
+*.so
+
+# Dağıtım paketleri
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller dosyaları
+*.manifest
+*.spec
+
+# Birim test ve kapsama raporları
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Çeviriler
+*.mo
+*.pot
+
+# Django dosyaları
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask dosyaları
+instance/
+.webassets-cache
+
+# Scrapy dosyaları
+.scrapy
+
+# Sphinx dökümantasyonu
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# virtualenv ve venv
+venv/
+ENV/
+env/
+.venv/
+.env/
+
+# Spyder IDE
+.spyderproject
+.spyproject
+
+# Rope IDE
+.ropeproject
+
+# mkdocs belgeleri
+/site
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+*.iws
+.idea_modules/
+
+# Diğer IDE'ler ve düzenleyiciler
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.swp
+*.swo
+
+# OS tarafından oluşturulan dosyalar
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Geçici dosyalar
+*.tmp
+*.bak
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtualenv
+venv/
+ENV/
+
+# Telegram bot
+.env
+
+# Dosyalar
+verified_users.json
+conditions.json
+
+# IDE
+.vscode/
+.idea/
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db

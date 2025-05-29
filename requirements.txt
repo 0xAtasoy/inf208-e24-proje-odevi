@@ -1,0 +1,7 @@
+python-telegram-bot==13.7
+python-dotenv==0.19.2
+urllib3==1.26.7
+requests==2.27.1
+certifi==2021.10.8
+APScheduler==3.6.3
+pytz==2021.3 
