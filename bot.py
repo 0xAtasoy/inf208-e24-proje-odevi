@@ -12,6 +12,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 from dotenv import load_dotenv
 import servo  # Servo motor kontrolü için modül
 import ldr  # LDR modülünü import et
+import dhteleven  # DHT11 modülünü import et
 
 # .env dosyasından değişkenleri yükle
 load_dotenv()
@@ -409,11 +410,13 @@ def get_sensor_data():
         # LDR'den ışık değerini al
         light = ldr.get_lux()
         
-        # Diğer sensörler için örnek değerler (şimdilik)
+        # DHT11'den sıcaklık ve nem değerlerini al
+        temperature, humidity = dhteleven.get_temperature_and_humidity()
+        
         sensor_data = {
-            "temperature": round(random.uniform(18.0, 30.0), 1),
-            "humidity": round(random.uniform(15.0, 80.0), 1),
-            "light": light  # Gerçek LDR değeri
+            "temperature": temperature,
+            "humidity": humidity,
+            "light": light
         }
         
         # Koşulları değerlendirerek röle durumunu belirle
@@ -878,10 +881,13 @@ def update_servo_status():
         # LDR'den ışık değerini al
         light = ldr.get_lux()
         
+        # DHT11'den sıcaklık ve nem değerlerini al
+        temperature, humidity = dhteleven.get_temperature_and_humidity()
+        
         sensor_data = {
-            "temperature": round(random.uniform(18.0, 30.0), 1),
-            "humidity": round(random.uniform(15.0, 80.0), 1),
-            "light": light  # Gerçek LDR değeri
+            "temperature": temperature,
+            "humidity": humidity,
+            "light": light
         }
         
         # Koşulları değerlendirerek röle durumunu belirle
