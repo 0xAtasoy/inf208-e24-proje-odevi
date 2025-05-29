@@ -117,72 +117,106 @@ def save_conditions(on_conditions, off_conditions):
 def evaluate_conditions(sensor_data):
     on_conditions, off_conditions = load_conditions()
     
-    # Kapatma koşullarını değerlendir (herhangi biri sağlanırsa röle kapanır)
-    for condition in off_conditions:
-        if not condition.get("state", True):  # Koşul pasifse atla
-            continue
-            
-        sensor_type = condition["type"]
-        sensor_value = sensor_data[sensor_type]
-        condition_value = condition["value"]
-        operator = condition["operator"]
+    # Kapatma koşullarını değerlendir (mantıksal bağlaçlara göre değerlendir)
+    if off_conditions:
+        # Aktif off_conditions'ları filtrele
+        active_off_conditions = [cond for cond in off_conditions if cond.get("state", True)]
         
-        # Operatöre göre karşılaştır
-        if operator == ">" and sensor_value > condition_value:
-            return False  # Röleyi kapat
-        elif operator == "<" and sensor_value < condition_value:
-            return False  # Röleyi kapat
-        elif operator == "=" and sensor_value == condition_value:
-            return False  # Röleyi kapat
-        elif operator == ">=" and sensor_value >= condition_value:
-            return False  # Röleyi kapat
-        elif operator == "<=" and sensor_value <= condition_value:
-            return False  # Röleyi kapat
+        if active_off_conditions:
+            # Mantıksal gruplara ayır (AND/OR grupları)
+            condition_groups = []
+            current_group = []
+            
+            for i, condition in enumerate(active_off_conditions):
+                current_group.append(condition)
+                
+                # Son eleman veya sonraki koşulun mantıksal bağlacı OR ise grubu tamamla
+                if i == len(active_off_conditions) - 1 or active_off_conditions[i].get("logical", "AND") == "OR":
+                    condition_groups.append(current_group)
+                    current_group = []
+            
+            # Tüm grupları değerlendir (gruplar arasında OR bağlacı var)
+            for group in condition_groups:
+                all_conditions_in_group_met = True
+                
+                # Gruptaki tüm koşulları AND bağlacı ile değerlendir
+                for condition in group:
+                    sensor_type = condition["type"]
+                    sensor_value = sensor_data[sensor_type]
+                    condition_value = condition["value"]
+                    operator = condition["operator"]
+                    
+                    # Operatöre göre karşılaştır
+                    if operator == ">":
+                        result = sensor_value > condition_value
+                    elif operator == "<":
+                        result = sensor_value < condition_value
+                    elif operator == "=":
+                        result = sensor_value == condition_value
+                    elif operator == ">=":
+                        result = sensor_value >= condition_value
+                    elif operator == "<=":
+                        result = sensor_value <= condition_value
+                    
+                    all_conditions_in_group_met = all_conditions_in_group_met and result
+                
+                # Eğer bir grup tamamen sağlanıyorsa röleyi kapat
+                if all_conditions_in_group_met:
+                    return False  # Röleyi kapat
     
-    # Açma koşullarını değerlendir (tümü sağlanırsa röle açılır)
+    # Açma koşullarını değerlendir (mantıksal bağlaçlara göre değerlendir)
     if not on_conditions:
         return True  # Açma koşulu yoksa varsayılan olarak açık
-        
-    all_conditions_met = True
-    any_condition_met = False
     
-    for i, condition in enumerate(on_conditions):
-        if not condition.get("state", True):  # Koşul pasifse atla
-            continue
+    # Aktif on_conditions'ları filtrele
+    active_on_conditions = [cond for cond in on_conditions if cond.get("state", True)]
+    
+    if not active_on_conditions:
+        return True  # Aktif açma koşulu yoksa varsayılan olarak açık
+    
+    # Mantıksal gruplara ayır (AND/OR grupları)
+    condition_groups = []
+    current_group = []
+    
+    for i, condition in enumerate(active_on_conditions):
+        current_group.append(condition)
+        
+        # Son eleman veya sonraki koşulun mantıksal bağlacı OR ise grubu tamamla
+        if i == len(active_on_conditions) - 1 or active_on_conditions[i].get("logical", "AND") == "OR":
+            condition_groups.append(current_group)
+            current_group = []
+    
+    # En az bir grup tamamen sağlanıyorsa röleyi aç
+    for group in condition_groups:
+        all_conditions_in_group_met = True
+        
+        # Gruptaki tüm koşulları AND bağlacı ile değerlendir
+        for condition in group:
+            sensor_type = condition["type"]
+            sensor_value = sensor_data[sensor_type]
+            condition_value = condition["value"]
+            operator = condition["operator"]
             
-        sensor_type = condition["type"]
-        sensor_value = sensor_data[sensor_type]
-        condition_value = condition["value"]
-        operator = condition["operator"]
+            # Operatöre göre karşılaştır
+            if operator == ">":
+                result = sensor_value > condition_value
+            elif operator == "<":
+                result = sensor_value < condition_value
+            elif operator == "=":
+                result = sensor_value == condition_value
+            elif operator == ">=":
+                result = sensor_value >= condition_value
+            elif operator == "<=":
+                result = sensor_value <= condition_value
+            
+            all_conditions_in_group_met = all_conditions_in_group_met and result
         
-        # Operatöre göre karşılaştır
-        if operator == ">":
-            result = sensor_value > condition_value
-        elif operator == "<":
-            result = sensor_value < condition_value
-        elif operator == "=":
-            result = sensor_value == condition_value
-        elif operator == ">=":
-            result = sensor_value >= condition_value
-        elif operator == "<=":
-            result = sensor_value <= condition_value
-        
-        # Mantıksal bağlaca göre sonucu birleştir
-        if i > 0:
-            prev_logical = on_conditions[i-1].get("logical", "AND")
-            if prev_logical == "AND":
-                all_conditions_met = all_conditions_met and result
-            elif prev_logical == "OR":
-                any_condition_met = any_condition_met or result
-        else:
-            all_conditions_met = result
-            any_condition_met = result
+        # Eğer bir grup tamamen sağlanıyorsa röleyi aç
+        if all_conditions_in_group_met:
+            return True  # Röleyi aç
     
-    # Final kararı ver
-    if any_condition_met:
-        return True  # En az bir OR koşulu sağlanıyorsa röleyi aç
-    else:
-        return all_conditions_met  # Tüm AND koşulları sağlanıyorsa röleyi aç
+    # Hiçbir grup tamamen sağlanmıyorsa röleyi kapalı tut
+    return False
 
 def start(update: Update, context: CallbackContext) -> None:
     """Bot başlatıldığında kullanıcıya karşılama mesajı gönder."""
