@@ -10,6 +10,7 @@ import uuid  # Benzersiz ID'ler için
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler, ConversationHandler
 from dotenv import load_dotenv
+import servo  # Servo motor kontrolü için modül
 
 # .env dosyasından değişkenleri yükle
 load_dotenv()
@@ -162,17 +163,27 @@ def evaluate_conditions(sensor_data):
                 
                 # Eğer bir grup tamamen sağlanıyorsa röleyi kapat
                 if all_conditions_in_group_met:
+                    # Servo motoru durdur
+                    servo.durdur()
                     return False  # Röleyi kapat
     
     # Açma koşullarını değerlendir (mantıksal bağlaçlara göre değerlendir)
     if not on_conditions:
-        return True  # Açma koşulu yoksa varsayılan olarak açık
+        # Açma koşulu yoksa varsayılan olarak açık
+        # Eğer servo motor çalışmıyorsa çalıştır
+        if not servo.durum_kontrol():
+            servo.basla()
+        return True
     
     # Aktif on_conditions'ları filtrele
     active_on_conditions = [cond for cond in on_conditions if cond.get("state", True)]
     
     if not active_on_conditions:
-        return True  # Aktif açma koşulu yoksa varsayılan olarak açık
+        # Aktif açma koşulu yoksa varsayılan olarak açık
+        # Eğer servo motor çalışmıyorsa çalıştır
+        if not servo.durum_kontrol():
+            servo.basla()
+        return True
     
     # Mantıksal gruplara ayır (AND/OR grupları)
     condition_groups = []
@@ -213,9 +224,13 @@ def evaluate_conditions(sensor_data):
         
         # Eğer bir grup tamamen sağlanıyorsa röleyi aç
         if all_conditions_in_group_met:
+            # Servo motoru çalıştır
+            servo.basla()
             return True  # Röleyi aç
     
     # Hiçbir grup tamamen sağlanmıyorsa röleyi kapalı tut
+    # Servo motoru durdur
+    servo.durdur()
     return False
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -397,6 +412,11 @@ def get_sensor_data():
     
     # Koşulları değerlendirerek röle durumunu belirle
     power = evaluate_conditions(sensor_data)
+    
+    # Röle durumunu servo motora göre ayarla
+    # power değeri evaluate_conditions fonksiyonu tarafından hesaplandı,
+    # ancak servo'nun gerçek durumunu kontrol ediyoruz
+    power = servo.durum_kontrol()
     
     # Röle durumunu ekle
     sensor_data["power"] = power
@@ -801,14 +821,18 @@ def handle_callback_query(update: Update, context: CallbackContext) -> None:
             )
     
     elif callback_data == "change_power_status":
-        # Güç durumu değiştir butonuna basıldığında
-        query.answer("Güç durumu manuel olarak değiştirildi.")
-        
         # Mevcut sensör verilerini al
         sensor_data = get_sensor_data()
         
-        # Güç durumunu tersine çevir
-        sensor_data["power"] = not sensor_data["power"]
+        # Güç durumunu tersine çevir ve servo motoru çalıştır/durdur
+        if sensor_data["power"]:
+            servo.durdur()
+            sensor_data["power"] = False
+            query.answer("Servo motor manuel olarak durduruldu.")
+        else:
+            servo.basla()
+            sensor_data["power"] = True
+            query.answer("Servo motor manuel eolarak çalıştırıldı.")
         
         # Mesajı güncelle
         query.edit_message_text(
@@ -833,6 +857,23 @@ def handle_callback_query(update: Update, context: CallbackContext) -> None:
     
     return ConversationHandler.END
 
+def update_servo_status():
+    """Sensör verilerine göre servo durumunu güncelle."""
+    sensor_data = {
+        "temperature": round(random.uniform(18.0, 30.0), 1),
+        "humidity": round(random.uniform(15.0, 80.0), 1),
+        "light": round(random.uniform(5.0, 100.0), 1)
+    }
+    
+    # Koşulları değerlendirerek röle durumunu belirle
+    power = evaluate_conditions(sensor_data)
+    
+    # Servo durumunu logla
+    logger.info(f"Servo durumu güncellendi: {'AÇIK' if power else 'KAPALI'}")
+    logger.info(f"Sensör değerleri: Sıcaklık={sensor_data['temperature']}°C, Nem={sensor_data['humidity']}%, Işık={sensor_data['light']} lux")
+    
+    return power
+
 def auto_refresh_dashboard(context: CallbackContext) -> None:
     """Dashboard'u otomatik olarak yenile."""
     # Job context'inden chat_id'yi al
@@ -844,6 +885,9 @@ def auto_refresh_dashboard(context: CallbackContext) -> None:
     
     # Mesaj ID'sini al
     message_id = ACTIVE_DASHBOARDS[chat_id]
+    
+    # Servo durumunu güncelle
+    update_servo_status()
     
     # Sensör verilerini al
     sensor_data = get_sensor_data()
@@ -920,6 +964,13 @@ def main() -> None:
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN bulunamadı. .env dosyasını kontrol edin.")
         return
+
+    # Başlangıçta servo motorun durumunu kontrol et
+    logger.info("Servo motor durumu kontrol ediliyor...")
+    if servo.durum_kontrol():
+        logger.info("Servo motor çalışıyor. Durum: AÇIK")
+    else:
+        logger.info("Servo motor çalışmıyor. Durum: KAPALI")
 
     # Updater oluştur ve token'ı geçir
     updater = Updater(token)
