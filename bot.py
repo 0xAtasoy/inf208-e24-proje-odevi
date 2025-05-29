@@ -411,7 +411,11 @@ def get_sensor_data():
         light = ldr.get_lux()
         
         # DHT11'den sıcaklık ve nem değerlerini al
-        temperature, humidity = dhteleven.get_temperature_and_humidity()
+        try:
+            temperature, humidity = dhteleven.get_temperature_and_humidity()
+        except Exception as e:
+            logger.error(f"DHT11 okuma hatası: {e}")
+            temperature, humidity = 0.0, 0.0
         
         sensor_data = {
             "temperature": temperature,
@@ -882,7 +886,11 @@ def update_servo_status():
         light = ldr.get_lux()
         
         # DHT11'den sıcaklık ve nem değerlerini al
-        temperature, humidity = dhteleven.get_temperature_and_humidity()
+        try:
+            temperature, humidity = dhteleven.get_temperature_and_humidity()
+        except Exception as e:
+            logger.error(f"DHT11 okuma hatası: {e}")
+            temperature, humidity = 0.0, 0.0
         
         sensor_data = {
             "temperature": temperature,
