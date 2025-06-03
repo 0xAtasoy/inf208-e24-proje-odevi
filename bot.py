@@ -116,73 +116,93 @@ def save_conditions(on_conditions, off_conditions):
             "off_conditions": off_conditions
         }, file, indent=4)
 
-# Koşulları değerlendir ve motor durumunu belirle
+def evaluate_condition_chain(conditions, sensor_data):
+    """Koşulları ve mantıksal bağlaçları değerlendir."""
+    if not conditions:
+        return False
+    
+    # İlk koşulu değerlendir
+    result = check_single_condition(conditions[0], sensor_data)
+    
+    # Diğer koşulları ve bağlaçları değerlendir
+    for i in range(1, len(conditions)):
+        current_condition = conditions[i]
+        logical = conditions[i-1].get("logical", "NONE")
+        
+        # Eğer bağlaç yoksa döngüyü sonlandır
+        if logical == "NONE":
+            break
+            
+        # Mevcut koşulu değerlendir
+        current_result = check_single_condition(current_condition, sensor_data)
+        
+        # Bağlaca göre sonucu güncelle
+        if logical == "AND":
+            result = result and current_result
+        elif logical == "OR":
+            result = result or current_result
+    
+    return result
+
+def check_single_condition(condition, sensor_data):
+    """Tek bir koşulu değerlendir."""
+    # Koşul pasifse False döndür
+    if not condition.get('state', True):
+        return False
+        
+    sensor_type = condition['type']
+    operator = condition['operator']
+    value = condition['value']
+    sensor_value = sensor_data[sensor_type]
+    
+    # Koşulu değerlendir
+    if operator == ">":
+        return sensor_value > value
+    elif operator == "<":
+        return sensor_value < value
+    elif operator == "=":
+        return sensor_value == value
+    elif operator == ">=":
+        return sensor_value >= value
+    elif operator == "<=":
+        return sensor_value <= value
+    return False
+
 def evaluate_conditions(sensor_data):
-    """Koşulları değerlendir ve motor durumunu belirle."""
+    """Koşulları değerlendir ve motor durumunu güncelle."""
     try:
-        # Koşulları yükle
-        on_conditions, off_conditions = load_conditions()
-        
         # Önce durdurma koşullarını kontrol et
-        for condition in off_conditions:
-            if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
-                continue
-                
-            if condition['type'] == 'temperature':
-                if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
-                    logger.info(f"Durdurma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C > {condition['value']}°C")
+        should_stop = evaluate_condition_chain(sensor_data["off_conditions"], sensor_data)
+        if should_stop:
+            if sensor_data["power"]:
+                logger.info("Durdurma koşulu sağlandı, motor durduruluyor.")
+                if dc_motor.durdur():
+                    sensor_data["power"] = False
                     return False
-                elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
-                    logger.info(f"Durdurma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C < {condition['value']}°C")
-                    return False
-            elif condition['type'] == 'humidity':
-                if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
-                    logger.info(f"Durdurma koşulu sağlandı: Nem {sensor_data['humidity']}% > {condition['value']}%")
-                    return False
-                elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
-                    logger.info(f"Durdurma koşulu sağlandı: Nem {sensor_data['humidity']}% < {condition['value']}%")
-                    return False
-            elif condition['type'] == 'light':
-                if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
-                    logger.info(f"Durdurma koşulu sağlandı: Işık {sensor_data['light']} lux > {condition['value']} lux")
-                    return False
-                elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
-                    logger.info(f"Durdurma koşulu sağlandı: Işık {sensor_data['light']} lux < {condition['value']} lux")
-                    return False
-        
+                else:
+                    logger.error("Motor durdurulamadı!")
+                    return sensor_data["power"]
+            return False
+
         # Sonra çalıştırma koşullarını kontrol et
-        for condition in on_conditions:
-            if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
-                continue
-                
-            if condition['type'] == 'temperature':
-                if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
-                    logger.info(f"Çalıştırma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C > {condition['value']}°C")
+        should_run = evaluate_condition_chain(sensor_data["on_conditions"], sensor_data)
+        if should_run:
+            if not sensor_data["power"]:
+                logger.info("Çalıştırma koşulu sağlandı, motor çalıştırılıyor.")
+                if dc_motor.basla():
+                    sensor_data["power"] = True
                     return True
-                elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
-                    logger.info(f"Çalıştırma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C < {condition['value']}°C")
-                    return True
-            elif condition['type'] == 'humidity':
-                if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
-                    logger.info(f"Çalıştırma koşulu sağlandı: Nem {sensor_data['humidity']}% > {condition['value']}%")
-                    return True
-                elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
-                    logger.info(f"Çalıştırma koşulu sağlandı: Nem {sensor_data['humidity']}% < {condition['value']}%")
-                    return True
-            elif condition['type'] == 'light':
-                if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
-                    logger.info(f"Çalıştırma koşulu sağlandı: Işık {sensor_data['light']} lux > {condition['value']} lux")
-                    return True
-                elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
-                    logger.info(f"Çalıştırma koşulu sağlandı: Işık {sensor_data['light']} lux < {condition['value']} lux")
-                    return True
-        
+                else:
+                    logger.error("Motor çalıştırılamadı!")
+                    return sensor_data["power"]
+            return True
+
         # Hiçbir koşul sağlanmazsa mevcut durumu koru
-        return sensor_data.get('power', False)
-        
+        return sensor_data["power"]
+
     except Exception as e:
         logger.error(f"Koşul değerlendirme hatası: {e}")
-        return sensor_data.get('power', False)  # Hata durumunda mevcut durumu koru
+        return sensor_data["power"]  # Hata durumunda mevcut durumu koru
 
 def start(update: Update, context: CallbackContext) -> None:
     """Bot başlatıldığında kullanıcıya karşılama mesajı gönder."""
