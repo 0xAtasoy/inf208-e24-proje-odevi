@@ -123,38 +123,54 @@ def evaluate_conditions(sensor_data):
         # Koşulları yükle
         on_conditions, off_conditions = load_conditions()
         
-        # Aktif durdurma koşullarını kontrol et
-        active_off_conditions = [c for c in off_conditions if c["active"]]
-        if active_off_conditions:
-            # Tüm durdurma koşullarını değerlendir
-            stop_conditions_met = all(evaluate_condition(c, sensor_data) for c in active_off_conditions)
-            if stop_conditions_met:
-                # Tüm koşullar sağlandıysa motoru durdur
-                dc_motor.durdur()
-                return False
+        # Çalıştırma koşullarını kontrol et
+        for condition in on_conditions:
+            if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
+                continue
+                
+            if condition['sensor'] == 'temperature':
+                if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
+                    return True
+                elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
+                    return True
+            elif condition['sensor'] == 'humidity':
+                if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
+                    return True
+                elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
+                    return True
+            elif condition['sensor'] == 'light':
+                if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
+                    return True
+                elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
+                    return True
         
-        # Aktif çalıştırma koşullarını kontrol et
-        active_on_conditions = [c for c in on_conditions if c["active"]]
-        if not active_on_conditions:
-            # Hiç çalıştırma koşulu yoksa ve motor çalışmıyorsa başlat
-            if not dc_motor.durum_kontrol():
-                dc_motor.basla()
-            return True
+        # Durdurma koşullarını kontrol et
+        for condition in off_conditions:
+            if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
+                continue
+                
+            if condition['sensor'] == 'temperature':
+                if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
+                    return False
+                elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
+                    return False
+            elif condition['sensor'] == 'humidity':
+                if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
+                    return False
+                elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
+                    return False
+            elif condition['sensor'] == 'light':
+                if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
+                    return False
+                elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
+                    return False
         
-        # Çalıştırma koşullarını değerlendir
-        start_conditions_met = all(evaluate_condition(c, sensor_data) for c in active_on_conditions)
-        if start_conditions_met:
-            # Tüm koşullar sağlandıysa motoru başlat
-            dc_motor.basla()
-            return True
-        else:
-            # Koşullar sağlanmadıysa motoru durdur
-            dc_motor.durdur()
-            return False
-            
+        # Hiçbir koşul sağlanmazsa mevcut durumu koru
+        return sensor_data.get('power', False)
+        
     except Exception as e:
         logger.error(f"Koşul değerlendirme hatası: {e}")
-        return False
+        return sensor_data.get('power', False)  # Hata durumunda mevcut durumu koru
 
 def start(update: Update, context: CallbackContext) -> None:
     """Bot başlatıldığında kullanıcıya karşılama mesajı gönder."""
