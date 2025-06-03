@@ -10,7 +10,7 @@ import uuid  # Benzersiz ID'ler için
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, CallbackQueryHandler, ConversationHandler
 from dotenv import load_dotenv
-import servo  # Servo motor kontrolü için modül
+import dc_motor  # servo yerine dc_motor modülünü import et
 import ldr  # LDR modülünü import et
 import dhteleven  # DHT11 modülünü import et
 
@@ -116,124 +116,45 @@ def save_conditions(on_conditions, off_conditions):
             "off_conditions": off_conditions
         }, file, indent=4)
 
-# Koşulları değerlendir ve röle durumunu belirle
+# Koşulları değerlendir ve motor durumunu belirle
 def evaluate_conditions(sensor_data):
-    on_conditions, off_conditions = load_conditions()
-    
-    # Kapatma koşullarını değerlendir (mantıksal bağlaçlara göre değerlendir)
-    if off_conditions:
-        # Aktif off_conditions'ları filtrele
-        active_off_conditions = [cond for cond in off_conditions if cond.get("state", True)]
+    """Koşulları değerlendir ve motor durumunu belirle."""
+    try:
+        # Koşulları yükle
+        on_conditions, off_conditions = load_conditions()
         
+        # Aktif durdurma koşullarını kontrol et
+        active_off_conditions = [c for c in off_conditions if c["active"]]
         if active_off_conditions:
-            # Mantıksal gruplara ayır (AND/OR grupları)
-            condition_groups = []
-            current_group = []
-            
-            for i, condition in enumerate(active_off_conditions):
-                current_group.append(condition)
-                
-                # Son eleman veya sonraki koşulun mantıksal bağlacı OR ise grubu tamamla
-                if i == len(active_off_conditions) - 1 or active_off_conditions[i].get("logical", "AND") == "OR":
-                    condition_groups.append(current_group)
-                    current_group = []
-            
-            # Tüm grupları değerlendir (gruplar arasında OR bağlacı var)
-            for group in condition_groups:
-                all_conditions_in_group_met = True
-                
-                # Gruptaki tüm koşulları AND bağlacı ile değerlendir
-                for condition in group:
-                    sensor_type = condition["type"]
-                    sensor_value = sensor_data[sensor_type]
-                    condition_value = condition["value"]
-                    operator = condition["operator"]
-                    
-                    # Operatöre göre karşılaştır
-                    if operator == ">":
-                        result = sensor_value > condition_value
-                    elif operator == "<":
-                        result = sensor_value < condition_value
-                    elif operator == "=":
-                        result = sensor_value == condition_value
-                    elif operator == ">=":
-                        result = sensor_value >= condition_value
-                    elif operator == "<=":
-                        result = sensor_value <= condition_value
-                    
-                    all_conditions_in_group_met = all_conditions_in_group_met and result
-                
-                # Eğer bir grup tamamen sağlanıyorsa röleyi kapat
-                if all_conditions_in_group_met:
-                    # Servo motoru durdur
-                    servo.durdur()
-                    return False  # Röleyi kapat
-    
-    # Açma koşullarını değerlendir (mantıksal bağlaçlara göre değerlendir)
-    if not on_conditions:
-        # Açma koşulu yoksa varsayılan olarak açık
-        # Eğer servo motor çalışmıyorsa çalıştır
-        if not servo.durum_kontrol():
-            servo.basla()
-        return True
-    
-    # Aktif on_conditions'ları filtrele
-    active_on_conditions = [cond for cond in on_conditions if cond.get("state", True)]
-    
-    if not active_on_conditions:
-        # Aktif açma koşulu yoksa varsayılan olarak açık
-        # Eğer servo motor çalışmıyorsa çalıştır
-        if not servo.durum_kontrol():
-            servo.basla()
-        return True
-    
-    # Mantıksal gruplara ayır (AND/OR grupları)
-    condition_groups = []
-    current_group = []
-    
-    for i, condition in enumerate(active_on_conditions):
-        current_group.append(condition)
+            # Tüm durdurma koşullarını değerlendir
+            stop_conditions_met = all(evaluate_condition(c, sensor_data) for c in active_off_conditions)
+            if stop_conditions_met:
+                # Tüm koşullar sağlandıysa motoru durdur
+                dc_motor.durdur()
+                return False
         
-        # Son eleman veya sonraki koşulun mantıksal bağlacı OR ise grubu tamamla
-        if i == len(active_on_conditions) - 1 or active_on_conditions[i].get("logical", "AND") == "OR":
-            condition_groups.append(current_group)
-            current_group = []
-    
-    # En az bir grup tamamen sağlanıyorsa röleyi aç
-    for group in condition_groups:
-        all_conditions_in_group_met = True
+        # Aktif çalıştırma koşullarını kontrol et
+        active_on_conditions = [c for c in on_conditions if c["active"]]
+        if not active_on_conditions:
+            # Hiç çalıştırma koşulu yoksa ve motor çalışmıyorsa başlat
+            if not dc_motor.durum_kontrol():
+                dc_motor.basla()
+            return True
         
-        # Gruptaki tüm koşulları AND bağlacı ile değerlendir
-        for condition in group:
-            sensor_type = condition["type"]
-            sensor_value = sensor_data[sensor_type]
-            condition_value = condition["value"]
-            operator = condition["operator"]
+        # Çalıştırma koşullarını değerlendir
+        start_conditions_met = all(evaluate_condition(c, sensor_data) for c in active_on_conditions)
+        if start_conditions_met:
+            # Tüm koşullar sağlandıysa motoru başlat
+            dc_motor.basla()
+            return True
+        else:
+            # Koşullar sağlanmadıysa motoru durdur
+            dc_motor.durdur()
+            return False
             
-            # Operatöre göre karşılaştır
-            if operator == ">":
-                result = sensor_value > condition_value
-            elif operator == "<":
-                result = sensor_value < condition_value
-            elif operator == "=":
-                result = sensor_value == condition_value
-            elif operator == ">=":
-                result = sensor_value >= condition_value
-            elif operator == "<=":
-                result = sensor_value <= condition_value
-            
-            all_conditions_in_group_met = all_conditions_in_group_met and result
-        
-        # Eğer bir grup tamamen sağlanıyorsa röleyi aç
-        if all_conditions_in_group_met:
-            # Servo motoru çalıştır
-            servo.basla()
-            return True  # Röleyi aç
-    
-    # Hiçbir grup tamamen sağlanmıyorsa röleyi kapalı tut
-    # Servo motoru durdur
-    servo.durdur()
-    return False
+    except Exception as e:
+        logger.error(f"Koşul değerlendirme hatası: {e}")
+        return False
 
 def start(update: Update, context: CallbackContext) -> None:
     """Bot başlatıldığında kullanıcıya karşılama mesajı gönder."""
@@ -421,6 +342,11 @@ def get_sensor_data():
                 temperature, humidity = 0.0, 0.0
             else:
                 temperature, humidity = result
+                # -1 değerlerini 0'a çevir
+                if temperature < 0:
+                    temperature = 0.0
+                if humidity < 0:
+                    humidity = 0.0
         except Exception as e:
             logger.error(f"DHT11 okuma hatası: {e}")
             temperature, humidity = 0.0, 0.0
@@ -431,13 +357,13 @@ def get_sensor_data():
             "light": light
         }
         
-        # Koşulları değerlendirerek röle durumunu belirle
+        # Koşulları değerlendirerek motor durumunu belirle
         power = evaluate_conditions(sensor_data)
         
-        # Röle durumunu servo motora göre ayarla
-        power = servo.durum_kontrol()
+        # Motor durumunu kontrol et
+        power = dc_motor.durum_kontrol()
         
-        # Röle durumunu ekle
+        # Motor durumunu ekle
         sensor_data["power"] = power
         
         # Koşul listelerini ekle
@@ -854,15 +780,15 @@ def handle_callback_query(update: Update, context: CallbackContext) -> None:
         # Mevcut sensör verilerini al
         sensor_data = get_sensor_data()
         
-        # Güç durumunu tersine çevir ve servo motoru çalıştır/durdur
+        # Güç durumunu tersine çevir ve motoru çalıştır/durdur
         if sensor_data["power"]:
-            servo.durdur()
+            dc_motor.durdur()
             sensor_data["power"] = False
-            query.answer("Servo motor manuel olarak durduruldu.")
+            query.answer("Motor manuel olarak durduruldu.")
         else:
-            servo.basla()
+            dc_motor.basla()
             sensor_data["power"] = True
-            query.answer("Servo motor manuel eolarak çalıştırıldı.")
+            query.answer("Motor manuel eolarak çalıştırıldı.")
         
         # Mesajı güncelle
         query.edit_message_text(
@@ -887,8 +813,8 @@ def handle_callback_query(update: Update, context: CallbackContext) -> None:
     
     return ConversationHandler.END
 
-def update_servo_status():
-    """Sensör verilerine göre servo durumunu güncelle."""
+def update_motor_status():
+    """Sensör verilerine göre motor durumunu güncelle."""
     try:
         # LDR'den ışık değerini al
         try:
@@ -904,6 +830,11 @@ def update_servo_status():
                 temperature, humidity = 0.0, 0.0
             else:
                 temperature, humidity = result
+                # -1 değerlerini 0'a çevir
+                if temperature < 0:
+                    temperature = 0.0
+                if humidity < 0:
+                    humidity = 0.0
         except Exception as e:
             logger.error(f"DHT11 okuma hatası: {e}")
             temperature, humidity = 0.0, 0.0
@@ -914,16 +845,16 @@ def update_servo_status():
             "light": light
         }
         
-        # Koşulları değerlendirerek röle durumunu belirle
+        # Koşulları değerlendirerek motor durumunu belirle
         power = evaluate_conditions(sensor_data)
         
-        # Servo durumunu logla
-        logger.info(f"Servo durumu güncellendi: {'AÇIK' if power else 'KAPALI'}")
+        # Motor durumunu logla
+        logger.info(f"Motor durumu güncellendi: {'AÇIK' if power else 'KAPALI'}")
         logger.info(f"Sensör değerleri: Sıcaklık={sensor_data['temperature']}°C, Nem={sensor_data['humidity']}%, Işık={sensor_data['light']} lux")
         
         return power
     except Exception as e:
-        logger.error(f"Servo durumu güncelleme hatası: {e}")
+        logger.error(f"Motor durumu güncelleme hatası: {e}")
         return False
 
 def auto_refresh_dashboard(context: CallbackContext) -> None:
@@ -938,8 +869,8 @@ def auto_refresh_dashboard(context: CallbackContext) -> None:
     # Mesaj ID'sini al
     message_id = ACTIVE_DASHBOARDS[chat_id]
     
-    # Servo durumunu güncelle
-    update_servo_status()
+    # Motor durumunu güncelle
+    update_motor_status()
     
     # Sensör verilerini al
     sensor_data = get_sensor_data()
@@ -1017,9 +948,9 @@ def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN bulunamadı. .env dosyasını kontrol edin.")
         return
     
-    # Servo durumunu kontrol et
-    servo_status = servo.durum_kontrol()
-    logger.info(f"Başlangıçta servo durumu: {'AÇIK' if servo_status else 'KAPALI'}")
+    # Motor durumunu kontrol et
+    motor_status = dc_motor.durum_kontrol()
+    logger.info(f"Başlangıçta motor durumu: {'AÇIK' if motor_status else 'KAPALI'}")
     
     # Updater oluştur ve token'ı geçir
     updater = Updater(token)
@@ -1065,6 +996,9 @@ def main() -> None:
     
     # Bot'u sonlandırılana kadar çalışır durumda tut
     updater.idle()
+    
+    # Program sonlandığında GPIO pinlerini temizle
+    dc_motor.cleanup()
 
 if __name__ == '__main__':
     main() 

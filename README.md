@@ -1,71 +1,141 @@
-# IoT Telegram Bot
+# IoT Sensör Kontrol Botu
 
-Bu proje, IoT sensörlerini (sıcaklık, nem, ışık) izleyen ve bir röleyi kontrol eden bir Telegram botu içerir. Bot, sensör verilerini görüntüler ve kullanıcı tanımlı koşullara bağlı olarak röleyi çalıştırır veya durdurur.
+Bu proje, Raspberry Pi üzerinde çalışan ve Telegram üzerinden kontrol edilebilen bir IoT sensör kontrol sistemidir. Sistem, sıcaklık, nem ve ışık sensörlerinden veri toplar ve bu verilere göre DC motoru kontrol eder.
 
 ## Özellikler
 
-- 📊 **Gerçek Zamanlı Dashboard**: Sensör verilerini ve röle durumunu gösteren otomatik yenilenen dashboard
-- 🔐 **Kullanıcı Doğrulama**: Sadece onaylanmış kullanıcılar botu kullanabilir
-- ⚙️ **Koşullu Kontrol**: Röleyi belirli sensör koşullarına bağlı olarak otomatik çalıştırma/durdurma
-- 📱 **Kullanıcı Dostu Arayüz**: Kolay kullanılabilir Telegram arayüzü
+- 🔍 **Sensör Okuma**
+  - DHT11 ile sıcaklık ve nem ölçümü
+  - LDR ile ışık şiddeti ölçümü
+  - 10 saniyede bir otomatik veri güncelleme
+
+- 🎮 **Telegram Bot Kontrolü**
+  - Gerçek zamanlı sensör verilerini görüntüleme
+  - DC motoru manuel kontrol
+  - Koşullu otomatik kontrol sistemi
+
+- ⚙️ **Koşullu Kontrol Sistemi**
+  - Çalıştırma koşulları tanımlama
+  - Durdurma koşulları tanımlama
+  - AND/OR mantıksal operatörleri ile koşul birleştirme
+  - Koşulları aktif/pasif yapma
+  - Koşulları silme
+
+- 🔄 **Sistem Sıfırlama**
+  - Tüm koşulları sıfırlama
+  - DC motoru durdurma
+  - Sensör verilerini sıfırlama
+  - Onaylı/onaysız sıfırlama seçeneği
+
+## Donanım Gereksinimleri
+
+- Raspberry Pi (3 veya üzeri önerilir)
+- DHT11 Sıcaklık ve Nem Sensörü
+- LDR Işık Sensörü
+- DC Motor
+- L298N Motor Sürücü
+- Gerekli bağlantı kabloları ve dirençler
+
+## Bağlantılar
+
+### DHT11 Sensörü
+- VCC -> 3.3V
+- DATA -> GPIO14
+- GND -> GND
+
+### LDR Sensörü
+- VCC -> 3.3V
+- DATA -> GPIO17
+- GND -> GND
+
+### DC Motor (L298N üzerinden)
+- IN1 -> GPIO18
+- IN2 -> GPIO23
+- ENA -> GPIO24
+- VCC -> 12V
+- GND -> GND
 
 ## Kurulum
 
-1. Bu repository'yi klonlayın:
-```
-git clone https://github.com/KULLANICI_ADI/iot-telegram-bot.git
-cd iot-telegram-bot
+1. Gerekli paketleri yükleyin:
+```bash
+sudo apt-get update
+sudo apt-get install python3-pip python3-dev
 ```
 
-2. Gerekli bağımlılıkları yükleyin:
+2. Projeyi klonlayın:
+```bash
+git clone https://github.com/0xAtasoy/inf208-e24-proje-odevi.git
+cd inf208-e24-proje-odevi
 ```
+
+3. Sanal ortam oluşturun ve aktifleştirin:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+4. Gerekli Python paketlerini yükleyin:
+```bash
 pip install -r requirements.txt
 ```
 
-3. `.env` dosyası oluşturun ve Telegram bot token'ınızı ekleyin:
-```
-TELEGRAM_BOT_TOKEN=your_bot_token_here
+5. `.env` dosyası oluşturun:
+```bash
+echo "TELEGRAM_BOT_TOKEN=your_bot_token_here" > .env
 ```
 
 ## Kullanım
 
 1. Botu başlatın:
-```
+```bash
 python bot.py
 ```
 
-2. Telegram'da botu açın ve `/start` komutunu gönderin.
+2. Telegram'da botu bulun ve `/start` komutunu gönderin.
 
-3. Onaylanmış bir kullanıcı iseniz, `/dashboard` komutu ile sensör verilerini görüntüleyebilirsiniz.
+3. Dashboard'u görüntülemek için `/dashboard` komutunu kullanın.
 
-4. Röle için çalıştırma ve durdurma koşulları eklemek için dashboard menüsünü kullanın.
+4. Koşul eklemek için:
+   - "Koşulları Yönet" butonuna tıklayın
+   - "Çalıştırma Koşulu Ekle" veya "Durdurma Koşulu Ekle" seçin
+   - Sensör tipini seçin (Sıcaklık, Nem, Işık)
+   - Operatörü seçin (>, <, =)
+   - Değeri girin
+   - Mantıksal operatörü seçin (AND/OR)
 
-## Bot Komutları
+5. Sistemi sıfırlamak için:
+   - Terminal üzerinden:
+     ```bash
+     python reset_bot.py
+     ```
+   - Onay istemeden sıfırlamak için:
+     ```bash
+     python reset_bot.py --force
+     ```
 
-- `/start` - Botu başlatır ve temel bilgileri gösterir
-- `/dashboard` - Sensör dashboard'ını gösterir
-- `/reset` - Bot ayarlarını sıfırlar (sadece onaylanmış kullanıcılar için)
+## Komutlar
 
-## Bot Sıfırlama
+- `/start` - Botu başlatır
+- `/dashboard` - Sensör verilerini ve koşulları görüntüler
+- `/cancel` - Koşul ekleme işlemini iptal eder
 
-Terminalde aşağıdaki komutu çalıştırarak botu sıfırlayabilirsiniz:
-```
-python reset_bot.py
-```
+## Sistem Sıfırlama
 
-Veya onay istemeden sıfırlamak için:
-```
-python reset_bot.py --force
-```
+Sistem sıfırlama işlemi şunları yapar:
+- Tüm çalıştırma ve durdurma koşullarını siler
+- DC motoru durdurur
+- Sensör verilerini sıfırlar
+- Koşul dosyalarını temizler
 
-## Teknik Detaylar
-
-Bot, şu bileşenlerden oluşur:
-- Python Telegram Bot API (python-telegram-bot)
-- Sensör verilerini simüle eden modüller
-- Koşullu mantık işleyicisi
-- Veri saklama mekanizması (JSON dosyaları)
+Sıfırlama işlemi iki şekilde yapılabilir:
+1. **Onaylı Sıfırlama**: Kullanıcıdan onay ister
+2. **Onaysız Sıfırlama**: `--force` parametresi ile direkt sıfırlar
 
 ## Lisans
 
-Bu proje MIT lisansı altında lisanslanmıştır - detaylar için [LICENSE](LICENSE) dosyasına bakın. 
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+
+## İletişim
+
+Sorularınız veya önerileriniz için GitHub üzerinden issue açabilirsiniz. 
