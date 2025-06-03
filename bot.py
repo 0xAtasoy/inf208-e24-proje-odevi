@@ -123,47 +123,59 @@ def evaluate_conditions(sensor_data):
         # Koşulları yükle
         on_conditions, off_conditions = load_conditions()
         
-        # Çalıştırma koşullarını kontrol et
-        for condition in on_conditions:
-            if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
-                continue
-                
-            if condition['sensor'] == 'temperature':
-                if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
-                    return True
-                elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
-                    return True
-            elif condition['sensor'] == 'humidity':
-                if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
-                    return True
-                elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
-                    return True
-            elif condition['sensor'] == 'light':
-                if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
-                    return True
-                elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
-                    return True
-        
-        # Durdurma koşullarını kontrol et
+        # Önce durdurma koşullarını kontrol et
         for condition in off_conditions:
             if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
                 continue
                 
-            if condition['sensor'] == 'temperature':
+            if condition['type'] == 'temperature':
                 if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
+                    logger.info(f"Durdurma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C > {condition['value']}°C")
                     return False
                 elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
+                    logger.info(f"Durdurma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C < {condition['value']}°C")
                     return False
-            elif condition['sensor'] == 'humidity':
+            elif condition['type'] == 'humidity':
                 if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
+                    logger.info(f"Durdurma koşulu sağlandı: Nem {sensor_data['humidity']}% > {condition['value']}%")
                     return False
                 elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
+                    logger.info(f"Durdurma koşulu sağlandı: Nem {sensor_data['humidity']}% < {condition['value']}%")
                     return False
-            elif condition['sensor'] == 'light':
+            elif condition['type'] == 'light':
                 if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
+                    logger.info(f"Durdurma koşulu sağlandı: Işık {sensor_data['light']} lux > {condition['value']} lux")
                     return False
                 elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
+                    logger.info(f"Durdurma koşulu sağlandı: Işık {sensor_data['light']} lux < {condition['value']} lux")
                     return False
+        
+        # Sonra çalıştırma koşullarını kontrol et
+        for condition in on_conditions:
+            if not condition.get('active', True):  # active alanı yoksa varsayılan olarak True
+                continue
+                
+            if condition['type'] == 'temperature':
+                if condition['operator'] == '>' and sensor_data['temperature'] > condition['value']:
+                    logger.info(f"Çalıştırma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C > {condition['value']}°C")
+                    return True
+                elif condition['operator'] == '<' and sensor_data['temperature'] < condition['value']:
+                    logger.info(f"Çalıştırma koşulu sağlandı: Sıcaklık {sensor_data['temperature']}°C < {condition['value']}°C")
+                    return True
+            elif condition['type'] == 'humidity':
+                if condition['operator'] == '>' and sensor_data['humidity'] > condition['value']:
+                    logger.info(f"Çalıştırma koşulu sağlandı: Nem {sensor_data['humidity']}% > {condition['value']}%")
+                    return True
+                elif condition['operator'] == '<' and sensor_data['humidity'] < condition['value']:
+                    logger.info(f"Çalıştırma koşulu sağlandı: Nem {sensor_data['humidity']}% < {condition['value']}%")
+                    return True
+            elif condition['type'] == 'light':
+                if condition['operator'] == '>' and sensor_data['light'] > condition['value']:
+                    logger.info(f"Çalıştırma koşulu sağlandı: Işık {sensor_data['light']} lux > {condition['value']} lux")
+                    return True
+                elif condition['operator'] == '<' and sensor_data['light'] < condition['value']:
+                    logger.info(f"Çalıştırma koşulu sağlandı: Işık {sensor_data['light']} lux < {condition['value']} lux")
+                    return True
         
         # Hiçbir koşul sağlanmazsa mevcut durumu koru
         return sensor_data.get('power', False)
@@ -686,10 +698,88 @@ def handle_callback_query(update: Update, context: CallbackContext):
         # Dashboard'u göster
         sensor_data = get_sensor_data()
         query.message.edit_text(
-            text=format_dashboard(sensor_data),
-            reply_markup=get_dashboard_keyboard(),
-            parse_mode='HTML'
+            text=dashboard_message(
+                sensor_data["temperature"], 
+                sensor_data["humidity"], 
+                sensor_data["light"], 
+                sensor_data["power"], 
+                sensor_data["on_conditions"], 
+                sensor_data["off_conditions"]
+            ),
+            reply_markup=get_dashboard_keyboard()
         )
+        return
+    
+    if query.data == "manage_conditions":
+        # Koşul yönetimi ekranını göster
+        query.message.edit_text(
+            text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
+            reply_markup=get_condition_management_keyboard()
+        )
+        return
+    
+    if query.data == "back_to_dashboard":
+        # Dashboard'a geri dön
+        sensor_data = get_sensor_data()
+        query.message.edit_text(
+            text=dashboard_message(
+                sensor_data["temperature"], 
+                sensor_data["humidity"], 
+                sensor_data["light"], 
+                sensor_data["power"], 
+                sensor_data["on_conditions"], 
+                sensor_data["off_conditions"]
+            ),
+            reply_markup=get_dashboard_keyboard()
+        )
+        return
+    
+    if query.data.startswith("toggle_on_condition:"):
+        # Çalıştırma koşulu durumunu değiştir
+        condition_id = query.data.split(":")[1]
+        if toggle_condition(update, context, condition_id, "on"):
+            query.answer("Koşulun durumu değiştirildi!")
+            # Koşul yönetimi ekranını güncelle
+            query.message.edit_text(
+                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
+                reply_markup=get_condition_management_keyboard()
+            )
+        return
+    
+    if query.data.startswith("toggle_off_condition:"):
+        # Durdurma koşulu durumunu değiştir
+        condition_id = query.data.split(":")[1]
+        if toggle_condition(update, context, condition_id, "off"):
+            query.answer("Koşulun durumu değiştirildi!")
+            # Koşul yönetimi ekranını güncelle
+            query.message.edit_text(
+                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
+                reply_markup=get_condition_management_keyboard()
+            )
+        return
+    
+    if query.data.startswith("delete_on_condition:"):
+        # Çalıştırma koşulunu sil
+        condition_id = query.data.split(":")[1]
+        if delete_condition(update, context, condition_id, "on"):
+            query.answer("Koşul silindi!")
+            # Koşul yönetimi ekranını güncelle
+            query.message.edit_text(
+                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
+                reply_markup=get_condition_management_keyboard()
+            )
+        return
+    
+    if query.data.startswith("delete_off_condition:"):
+        # Durdurma koşulunu sil
+        condition_id = query.data.split(":")[1]
+        if delete_condition(update, context, condition_id, "off"):
+            query.answer("Koşul silindi!")
+            # Koşul yönetimi ekranını güncelle
+            query.message.edit_text(
+                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
+                reply_markup=get_condition_management_keyboard()
+            )
         return
     
     if query.data == "toggle_power":
@@ -715,55 +805,71 @@ def handle_callback_query(update: Update, context: CallbackContext):
             
             # Mesajı güncelle
             query.message.edit_text(
-                text=format_dashboard(sensor_data),
-                reply_markup=get_dashboard_keyboard(),
-                parse_mode='HTML'
+                text=dashboard_message(
+                    sensor_data["temperature"], 
+                    sensor_data["humidity"], 
+                    sensor_data["light"], 
+                    sensor_data["power"], 
+                    sensor_data["on_conditions"], 
+                    sensor_data["off_conditions"]
+                ),
+                reply_markup=get_dashboard_keyboard()
             )
         except Exception as e:
             logger.error(f"Güç durumu değiştirme hatası: {e}")
             query.answer("Bir hata oluştu! Lütfen tekrar deneyin.")
             return
+    
+    if query.data == "refresh":
+        # Dashboard'u yenile
+        sensor_data = get_sensor_data()
+        query.message.edit_text(
+            text=dashboard_message(
+                sensor_data["temperature"], 
+                sensor_data["humidity"], 
+                sensor_data["light"], 
+                sensor_data["power"], 
+                sensor_data["on_conditions"], 
+                sensor_data["off_conditions"]
+            ),
+            reply_markup=get_dashboard_keyboard()
+        )
+        query.answer("Dashboard yenilendi!")
+        return
 
 def update_motor_status():
     """Sensör verilerine göre motor durumunu güncelle."""
     try:
-        # LDR'den ışık değerini al
-        try:
-            light = ldr.get_lux()
-        except Exception as e:
-            logger.error(f"LDR okuma hatası: {e}")
-            light = 0.0
-        
-        # DHT11'den sıcaklık ve nem değerlerini al
-        try:
-            result = dhteleven.get_temperature_and_humidity()
-            if result is None:
-                temperature, humidity = 0.0, 0.0
-            else:
-                temperature, humidity = result
-                # -1 değerlerini 0'a çevir
-                if temperature < 0:
-                    temperature = 0.0
-                if humidity < 0:
-                    humidity = 0.0
-        except Exception as e:
-            logger.error(f"DHT11 okuma hatası: {e}")
-            temperature, humidity = 0.0, 0.0
-        
-        sensor_data = {
-            "temperature": temperature,
-            "humidity": humidity,
-            "light": light
-        }
+        # Sensör verilerini al
+        sensor_data = get_sensor_data()
         
         # Koşulları değerlendirerek motor durumunu belirle
-        power = evaluate_conditions(sensor_data)
+        should_run = evaluate_conditions(sensor_data)
+        
+        # Mevcut motor durumunu kontrol et
+        current_status = dc_motor.durum_kontrol()
+        
+        # Motor durumunu güncelle
+        if should_run and not current_status:
+            # Motor çalışmalı ama çalışmıyor
+            if dc_motor.basla():
+                logger.info("Motor koşullar sağlandığı için çalıştırıldı")
+                sensor_data["power"] = True  # Güç durumunu hemen güncelle
+            else:
+                logger.error("Motor çalıştırılamadı")
+        elif not should_run and current_status:
+            # Motor çalışmamalı ama çalışıyor
+            if dc_motor.durdur():
+                logger.info("Motor koşullar sağlanmadığı için durduruldu")
+                sensor_data["power"] = False  # Güç durumunu hemen güncelle
+            else:
+                logger.error("Motor durdurulamadı")
         
         # Motor durumunu logla
-        logger.info(f"Motor durumu güncellendi: {'AÇIK' if power else 'KAPALI'}")
+        logger.info(f"Motor durumu: {'AÇIK' if should_run else 'KAPALI'}")
         logger.info(f"Sensör değerleri: Sıcaklık={sensor_data['temperature']}°C, Nem={sensor_data['humidity']}%, Işık={sensor_data['light']} lux")
         
-        return power
+        return sensor_data["power"]  # Güncel güç durumunu döndür
     except Exception as e:
         logger.error(f"Motor durumu güncelleme hatası: {e}")
         return False
@@ -840,16 +946,16 @@ def dashboard(update: Update, context: CallbackContext) -> None:
         for job in existing_jobs:
             job.schedule_removal()
     
-    # 10 saniyede bir yenileme job'ını ekle
+    # 5 saniyede bir yenileme job'ını ekle (10 saniyeden 5 saniyeye düşürüldü)
     context.job_queue.run_repeating(
         auto_refresh_dashboard, 
-        interval=10, 
-        first=10,
+        interval=5,  # 10 saniyeden 5 saniyeye düşürüldü
+        first=5,     # İlk yenileme de 5 saniyede yapılsın
         context=chat_id,
         name=f"refresh_{chat_id}"
     )
     
-    update.message.reply_text("Dashboard her 10 saniyede bir otomatik olarak yenilenecektir.")
+    update.message.reply_text("Dashboard her 5 saniyede bir otomatik olarak yenilenecektir.")
 
 def main() -> None:
     """Bot'u başlat."""
