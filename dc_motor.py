@@ -1,72 +1,79 @@
 import RPi.GPIO as GPIO
-import time
+from time import sleep
 
 # GPIO pin numaraları
-MOTOR_PIN1 = 18  # IN1
-MOTOR_PIN2 = 23  # IN2
-ENABLE_PIN = 24  # ENA
+MOTOR_A = 16  # IN1
+MOTOR_B = 18  # IN2
+MOTOR_ENABLE = 22  # ENA
 
 # GPIO ayarları
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(MOTOR_PIN1, GPIO.OUT)
-GPIO.setup(MOTOR_PIN2, GPIO.OUT)
-GPIO.setup(ENABLE_PIN, GPIO.OUT)
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(MOTOR_A, GPIO.OUT)
+GPIO.setup(MOTOR_B, GPIO.OUT)
+GPIO.setup(MOTOR_ENABLE, GPIO.OUT)
 
-# PWM nesnesi oluştur (frekans = 100Hz)
-pwm = GPIO.PWM(ENABLE_PIN, 100)
-pwm.start(0)  # Başlangıçta motor kapalı
+# Motor durumu
+motor_running = False
 
 def basla():
-    """DC motoru başlat."""
+    """Motoru ileri yönde çalıştır."""
+    global motor_running
     try:
-        # Motoru ileri yönde döndür
-        GPIO.output(MOTOR_PIN1, GPIO.HIGH)
-        GPIO.output(MOTOR_PIN2, GPIO.LOW)
-        pwm.ChangeDutyCycle(100)  # Tam hız
+        # İleri hareket için pin durumları
+        GPIO.output(MOTOR_A, GPIO.HIGH)
+        GPIO.output(MOTOR_B, GPIO.LOW)
+        GPIO.output(MOTOR_ENABLE, GPIO.HIGH)
+        motor_running = True
         return True
     except Exception as e:
         print(f"Motor başlatma hatası: {e}")
         return False
 
 def durdur():
-    """DC motoru durdur."""
+    """Motoru durdur."""
+    global motor_running
     try:
-        # Motoru durdur
-        GPIO.output(MOTOR_PIN1, GPIO.LOW)
-        GPIO.output(MOTOR_PIN2, GPIO.LOW)
-        pwm.ChangeDutyCycle(0)
-        return False
+        # Motoru durdurmak için enable pinini LOW yap
+        GPIO.output(MOTOR_ENABLE, GPIO.LOW)
+        motor_running = False
+        return True
     except Exception as e:
         print(f"Motor durdurma hatası: {e}")
-        return True
-
-def durum_kontrol():
-    """DC motorun durumunu kontrol et."""
-    try:
-        # ENABLE_PIN'in durumunu kontrol et
-        return GPIO.input(ENABLE_PIN) == GPIO.HIGH
-    except Exception as e:
-        print(f"Motor durum kontrolü hatası: {e}")
         return False
 
-def cleanup():
+def durum_kontrol():
+    """Motorun çalışma durumunu kontrol et."""
+    return motor_running
+
+def temizle():
     """GPIO pinlerini temizle."""
     try:
-        pwm.stop()
         GPIO.cleanup()
     except Exception as e:
         print(f"GPIO temizleme hatası: {e}")
 
+# Test için
 if __name__ == "__main__":
     try:
         print("DC Motor Testi")
-        print("Motor başlatılıyor...")
+        print("İleri hareket")
         basla()
-        time.sleep(2)
-        print("Motor durduruluyor...")
+        sleep(2)
+        
+        print("Motor durdu")
         durdur()
-        cleanup()
-    except KeyboardInterrupt:
-        print("\nProgram sonlandırıldı.")
-        cleanup() 
+        sleep(1)
+        
+        print("Geri hareket")
+        GPIO.output(MOTOR_A, GPIO.LOW)
+        GPIO.output(MOTOR_B, GPIO.HIGH)
+        GPIO.output(MOTOR_ENABLE, GPIO.HIGH)
+        sleep(2)
+        
+        print("Motor durdu")
+        durdur()
+        
+    except Exception as e:
+        print(f"Test hatası: {e}")
+    finally:
+        temizle() 

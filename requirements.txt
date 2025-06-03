@@ -5,4 +5,6 @@ requests==2.27.1
 certifi==2021.10.8
 APScheduler==3.6.3
 pytz==2021.3
+RPi.GPIO==0.7.1
+dht11==1.0.1
 

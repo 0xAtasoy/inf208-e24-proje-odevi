@@ -265,7 +265,7 @@ def get_dashboard_keyboard():
             InlineKeyboardButton("Koşulları Düzenle", callback_data="manage_conditions")
         ],
         [
-            InlineKeyboardButton("Güç Durumunu Değiştir ⚡", callback_data="change_power_status")
+            InlineKeyboardButton("Güç Durumunu Değiştir ⚡", callback_data="toggle_power")
         ],
         [
             InlineKeyboardButton("Yenile 🔄", callback_data="refresh")
@@ -357,14 +357,8 @@ def get_sensor_data():
             "light": light
         }
         
-        # Koşulları değerlendirerek motor durumunu belirle
-        power = evaluate_conditions(sensor_data)
-        
         # Motor durumunu kontrol et
-        power = dc_motor.durum_kontrol()
-        
-        # Motor durumunu ekle
-        sensor_data["power"] = power
+        sensor_data["power"] = dc_motor.durum_kontrol()
         
         # Koşul listelerini ekle
         on_conditions, off_conditions = load_conditions()
@@ -667,151 +661,52 @@ def handle_message(update: Update, context: CallbackContext) -> None:
             "Yanlış şifre. Lütfen tekrar deneyin."
         )
 
-def handle_callback_query(update: Update, context: CallbackContext) -> None:
-    """Butona tıklandığında çalışacak fonksiyon."""
+def handle_callback_query(update: Update, context: CallbackContext):
+    """Callback query'leri işle."""
     query = update.callback_query
-    chat_id = update.effective_chat.id
+    query.answer()
     
-    # Callback verisini al
-    callback_data = query.data
-    
-    # Koşul ekleme callback'lerini ConversationHandler işleyecek, burada işleme
-    if callback_data in ["add_on_condition", "add_off_condition"]:
+    if query.data == "dashboard":
+        # Dashboard'u göster
+        sensor_data = get_sensor_data()
+        query.message.edit_text(
+            text=format_dashboard(sensor_data),
+            reply_markup=get_dashboard_keyboard(),
+            parse_mode='HTML'
+        )
         return
     
-    # Farklı butonlar için farklı işlemler
-    if callback_data == "refresh":
-        # Yenile butonuna tıklandığında dashboard'u güncelle
+    if query.data == "toggle_power":
         # Sensör verilerini al
         sensor_data = get_sensor_data()
         
-        # Mesajı güncelle
-        query.edit_message_text(
-            text=dashboard_message(
-                sensor_data["temperature"], 
-                sensor_data["humidity"], 
-                sensor_data["light"], 
-                sensor_data["power"], 
-                sensor_data["on_conditions"], 
-                sensor_data["off_conditions"]
-            ),
-            reply_markup=get_dashboard_keyboard()
-        )
-        
-        # Kullanıcıya bildirim göster
-        query.answer("Dashboard yenilendi!")
-        
-        # Aktif dashboard bilgisini güncelle
-        ACTIVE_DASHBOARDS[chat_id] = query.message.message_id
-    
-    elif callback_data == "manage_conditions":
-        # Koşulları yönetme ekranını göster
-        query.edit_message_text(
-            text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
-            reply_markup=get_condition_management_keyboard()
-        )
-        query.answer("Koşul yönetimi açıldı.")
-    
-    elif callback_data == "back_to_dashboard":
-        # Dashboard'a geri dön
-        sensor_data = get_sensor_data()
-        query.edit_message_text(
-            text=dashboard_message(
-                sensor_data["temperature"], 
-                sensor_data["humidity"], 
-                sensor_data["light"], 
-                sensor_data["power"], 
-                sensor_data["on_conditions"], 
-                sensor_data["off_conditions"]
-            ),
-            reply_markup=get_dashboard_keyboard()
-        )
-        query.answer("Dashboard'a geri dönüldü.")
-    
-    elif callback_data.startswith("delete_on_condition:"):
-        # Çalıştırma koşulu silme
-        condition_id = callback_data.split(":")[1]
-        if delete_condition(update, context, condition_id, "on"):
-            query.answer("Çalıştırma koşulu silindi!")
+        try:
+            # Güç durumunu tersine çevir ve motoru çalıştır/durdur
+            if sensor_data["power"]:
+                if dc_motor.durdur():  # Başarılı olduğunda True döner
+                    sensor_data["power"] = False
+                    query.answer("Motor manuel olarak durduruldu.")
+                else:
+                    query.answer("Motor durdurulurken bir hata oluştu!")
+                    return
+            else:
+                if dc_motor.basla():  # Başarılı olduğunda True döner
+                    sensor_data["power"] = True
+                    query.answer("Motor manuel olarak çalıştırıldı.")
+                else:
+                    query.answer("Motor çalıştırılırken bir hata oluştu!")
+                    return
             
-            # Koşul yönetimi ekranını güncelle
-            query.edit_message_text(
-                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
-                reply_markup=get_condition_management_keyboard()
+            # Mesajı güncelle
+            query.message.edit_text(
+                text=format_dashboard(sensor_data),
+                reply_markup=get_dashboard_keyboard(),
+                parse_mode='HTML'
             )
-    
-    elif callback_data.startswith("delete_off_condition:"):
-        # Durdurma koşulu silme
-        condition_id = callback_data.split(":")[1]
-        if delete_condition(update, context, condition_id, "off"):
-            query.answer("Durdurma koşulu silindi!")
-            
-            # Koşul yönetimi ekranını güncelle
-            query.edit_message_text(
-                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
-                reply_markup=get_condition_management_keyboard()
-            )
-    
-    elif callback_data.startswith("toggle_on_condition:"):
-        # Çalıştırma koşulu durumunu değiştirme
-        condition_id = callback_data.split(":")[1]
-        if toggle_condition(update, context, condition_id, "on"):
-            query.answer("Koşulun durumu değiştirildi!")
-            
-            # Koşul yönetimi ekranını güncelle
-            query.edit_message_text(
-                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
-                reply_markup=get_condition_management_keyboard()
-            )
-    
-    elif callback_data.startswith("toggle_off_condition:"):
-        # Durdurma koşulu durumunu değiştirme
-        condition_id = callback_data.split(":")[1]
-        if toggle_condition(update, context, condition_id, "off"):
-            query.answer("Koşulun durumu değiştirildi!")
-            
-            # Koşul yönetimi ekranını güncelle
-            query.edit_message_text(
-                text="Koşul Yönetimi\n\nAşağıda mevcut koşulları görebilir, durumlarını değiştirebilir veya silebilirsiniz:",
-                reply_markup=get_condition_management_keyboard()
-            )
-    
-    elif callback_data == "change_power_status":
-        # Mevcut sensör verilerini al
-        sensor_data = get_sensor_data()
-        
-        # Güç durumunu tersine çevir ve motoru çalıştır/durdur
-        if sensor_data["power"]:
-            dc_motor.durdur()
-            sensor_data["power"] = False
-            query.answer("Motor manuel olarak durduruldu.")
-        else:
-            dc_motor.basla()
-            sensor_data["power"] = True
-            query.answer("Motor manuel eolarak çalıştırıldı.")
-        
-        # Mesajı güncelle
-        query.edit_message_text(
-            text=dashboard_message(
-                sensor_data["temperature"], 
-                sensor_data["humidity"], 
-                sensor_data["light"], 
-                sensor_data["power"], 
-                sensor_data["on_conditions"], 
-                sensor_data["off_conditions"]
-            ),
-            reply_markup=get_dashboard_keyboard()
-        )
-    
-    elif callback_data == "do_nothing":
-        # Bazı butonlar (başlık butonları gibi) için hiçbir şey yapma
-        query.answer()
-    
-    else:
-        # Diğer butonlar için bildirim
-        query.answer(f"{callback_data} işlevi henüz eklenmedi.")
-    
-    return ConversationHandler.END
+        except Exception as e:
+            logger.error(f"Güç durumu değiştirme hatası: {e}")
+            query.answer("Bir hata oluştu! Lütfen tekrar deneyin.")
+            return
 
 def update_motor_status():
     """Sensör verilerine göre motor durumunu güncelle."""
@@ -947,14 +842,14 @@ def main() -> None:
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN bulunamadı. .env dosyasını kontrol edin.")
         return
-    
+
     # Motor durumunu kontrol et
     motor_status = dc_motor.durum_kontrol()
     logger.info(f"Başlangıçta motor durumu: {'AÇIK' if motor_status else 'KAPALI'}")
     
     # Updater oluştur ve token'ı geçir
     updater = Updater(token)
-    
+
     # Dispatcher al
     dispatcher = updater.dispatcher
     
@@ -976,7 +871,7 @@ def main() -> None:
         allow_reentry=True,
         name="condition_conversation"
     )
-    
+
     # Komut işleyicileri ekle
     dispatcher.add_handler(CommandHandler("start", start))
     dispatcher.add_handler(CommandHandler("dashboard", dashboard))
@@ -989,11 +884,11 @@ def main() -> None:
     
     # Mesaj işleyicisi ekle (en sonda olmalı)
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-    
+
     # Bot'u başlat
     updater.start_polling()
     logger.info("Bot başlatıldı. Durdurmak için Ctrl+C tuşlarına basın.")
-    
+
     # Bot'u sonlandırılana kadar çalışır durumda tut
     updater.idle()
     

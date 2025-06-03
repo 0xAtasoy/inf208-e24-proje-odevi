@@ -4,10 +4,10 @@ import time
 
 # GPIO ayarları sadece 1 kez yapılsın
 GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
+GPIO.setmode(GPIO.BOARD)
 
-# DHT11 sensör nesnesi (PIN 14 kullanılıyor)
-instance = dht11.DHT11(pin=14)
+# DHT11 sensör nesnesi (PIN 8 kullanılıyor - BOARD modunda)
+instance = dht11.DHT11(pin=8)
 
 # Önceki geçerli değerler (başlangıçta -1)
 prev_temperature = 23.5
