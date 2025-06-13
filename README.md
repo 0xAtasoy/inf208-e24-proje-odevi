@@ -29,11 +29,13 @@ Bu proje, Raspberry Pi üzerinde çalışan ve Telegram üzerinden kontrol edile
 
 ## Donanım Gereksinimleri
 
-- Raspberry Pi (3 veya üzeri önerilir)
-- DHT11 Sıcaklık ve Nem Sensörü
-- LDR Işık Sensörü
+- Raspberry Pi 3 ve üzeri
+- DHT11 (Sıcaklık ve Nem Sensörü)
+- LDR (Işık Sensörü)
 - DC Motor
-- L298N Motor Sürücü
+- L293D Motor Sürücü
+- 5V 1A Adaptör
+- Klemens Çıkışlı DC Female Barrel Jack
 - Gerekli bağlantı kabloları ve dirençler
 
 ## Bağlantılar
@@ -57,33 +59,25 @@ Bu proje, Raspberry Pi üzerinde çalışan ve Telegram üzerinden kontrol edile
 
 ## Kurulum
 
-1. Gerekli paketleri yükleyin:
-```bash
-sudo apt-get update
-sudo apt-get install python3-pip python3-dev
-```
-
-2. Projeyi klonlayın:
+1. Projeyi klonlayın:
 ```bash
 git clone https://github.com/0xAtasoy/inf208-e24-proje-odevi.git
 cd inf208-e24-proje-odevi
 ```
 
-3. Sanal ortam oluşturun ve aktifleştirin:
+2. Sanal ortam oluşturun ve aktifleştirin:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-4. Gerekli Python paketlerini yükleyin:
+3. Gerekli Python paketlerini yükleyin:
 ```bash
 pip install -r requirements.txt
 ```
 
-5. `.env` dosyası oluşturun:
-```bash
-echo "TELEGRAM_BOT_TOKEN=your_bot_token_here" > .env
-```
+5. `.env` dosyası oluşturun . `TELEGRAM_BOT_TOKEN` ve `PASSWORD` bilgilerini girin.
+
 
 ## Kullanım
 
